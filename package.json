@@ -1,0 +1,19 @@
+{
+  "name": "arham-one",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@11.9.0",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "^3.8.4",
+    "turbo": "^2.10.0",
+    "typescript": "^6.0.3"
+  }
+}
