@@ -5,11 +5,10 @@
   "type": "module",
   "packageManager": "pnpm@11.9.0",
   "scripts": {
-    "dev": "turbo dev",
-    "build": "turbo build",
-    "lint": "turbo lint",
-    "test": "turbo test",
-    "format": "prettier --write ."
+    "dev": "vite",
+    "electron": "electron electron/main.js",
+    "desktop": "concurrently \"pnpm dev\" \"wait-on http://localhost:5173 && electron electron/main.js\"",
+    "build": "vite build"
   },
   "devDependencies": {
     "prettier": "^3.8.4",
