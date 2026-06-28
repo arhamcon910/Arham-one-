@@ -1,0 +1,62 @@
+name: arham-one
+
+services:
+
+  postgres:
+    image: postgres:17
+    container_name: arham-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: arham
+      POSTGRES_PASSWORD: arham123
+      POSTGRES_DB: arham
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    networks:
+      - arham-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: arham-redis
+    restart: unless-stopped
+
+    ports:
+      - "6379:6379"
+
+    volumes:
+      - redis_data:/data
+
+    networks:
+      - arham-network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: arham-pgadmin
+    restart: unless-stopped
+
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@arham.one
+      PGADMIN_DEFAULT_PASSWORD: admin123
+
+    ports:
+      - "5050:80"
+
+    depends_on:
+      - postgres
+
+    networks:
+      - arham-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  arham-network:
+    driver: bridge

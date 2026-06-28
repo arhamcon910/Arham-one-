@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  code        String   @unique
+  email       String?  @unique
+  phone       String?
+  website     String?
+
+  isActive    Boolean  @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users        User[]
+  auditLogs    AuditLog[]
+  settings     SystemSetting[]
+
+  @@index([code])
+}
+
+model User {
+  id              String   @id @default(cuid())
+
+  organizationId  String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+
+  firstName       String
+  lastName        String
+
+  email           String   @unique
+  phone           String?
+
+  passwordHash    String
+
+  isActive        Boolean  @default(true)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model AuditLog {
+  id              String   @id @default(cuid())
+
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+
+  module          String
+  action          String
+  entity          String
+  entityId        String
+
+  userId          String?
+
+  metadata        Json?
+
+  createdAt       DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([entity])
+}
+
+model SystemSetting {
+  id              String   @id @default(cuid())
+
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+
+  key             String
+  value           String
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, key])
+}

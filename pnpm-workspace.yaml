@@ -2,5 +2,7 @@ packages:
   - "apps/*"
   - "packages/*"
 allowBuilds:
+  '@prisma/engines': true
   electron-winstaller: set this to true or false
+  prisma: true
   unrs-resolver: true
