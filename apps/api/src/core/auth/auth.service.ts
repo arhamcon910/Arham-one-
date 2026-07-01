@@ -10,7 +10,9 @@ import { OrganizationService } from '../organization/organization.service';
 
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+
 import { TokenService } from './token';
+import { SessionService } from './session';
 
 @Injectable()
 export class AuthService {
@@ -18,6 +20,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly organizationService: OrganizationService,
     private readonly tokenService: TokenService,
+    private readonly sessionService: SessionService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -51,10 +54,19 @@ export class AuthService {
       passwordHash,
     });
 
-    const accessToken = await this.tokenService.generateAccessToken({
+    const tokens = await this.tokenService.generateTokenPair({
       sub: user.id,
       email: user.email,
       organizationId: organization.id,
+    });
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
+    const session = await this.sessionService.createSession({
+      userId: user.id,
+      refreshToken: tokens.refreshToken,
+      expiresAt,
     });
 
     return {
@@ -63,7 +75,9 @@ export class AuthService {
       data: {
         organization,
         user,
-        accessToken,
+        sessionId: session.id,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
       },
     };
   }
@@ -88,10 +102,19 @@ export class AuthService {
       user.organizationId,
     );
 
-    const accessToken = await this.tokenService.generateAccessToken({
+    const tokens = await this.tokenService.generateTokenPair({
       sub: user.id,
       email: user.email,
       organizationId: user.organizationId,
+    });
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
+    const session = await this.sessionService.createSession({
+      userId: user.id,
+      refreshToken: tokens.refreshToken,
+      expiresAt,
     });
 
     return {
@@ -100,7 +123,9 @@ export class AuthService {
       data: {
         organization,
         user,
-        accessToken,
+        sessionId: session.id,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
       },
     };
   }

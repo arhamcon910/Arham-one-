@@ -14,13 +14,25 @@ export class TokenService {
   ) {}
 
   async generateAccessToken(payload: JwtPayload): Promise<string> {
-    return this.jwtService.signAsync(payload);
+    return this.jwtService.signAsync(payload, {
+      expiresIn: '1d',
+    });
   }
 
   async generateRefreshToken(payload: JwtPayload): Promise<string> {
     return this.jwtService.signAsync(payload, {
       expiresIn: '30d',
     });
+  }
+
+  async generateTokenPair(payload: JwtPayload) {
+    const accessToken = await this.generateAccessToken(payload);
+    const refreshToken = await this.generateRefreshToken(payload);
+
+    return {
+      accessToken,
+      refreshToken,
+    };
   }
 
   async verifyToken(token: string): Promise<JwtPayload> {

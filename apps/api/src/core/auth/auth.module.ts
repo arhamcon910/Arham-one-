@@ -6,15 +6,18 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
-import { TokenModule } from './token';
-
 import { UsersModule } from '../users/users.module';
 import { OrganizationModule } from '../organization/organization.module';
+
+import { TokenModule } from './token';
+import { SessionModule } from './session';
 
 @Module({
   imports: [
     UsersModule,
     OrganizationModule,
+    TokenModule,
+    SessionModule,
 
     PassportModule.register({
       defaultStrategy: 'jwt',
@@ -26,8 +29,6 @@ import { OrganizationModule } from '../organization/organization.module';
         expiresIn: '1d',
       },
     }),
-
-    TokenModule,
   ],
 
   controllers: [AuthController],
@@ -42,6 +43,7 @@ import { OrganizationModule } from '../organization/organization.module';
     PassportModule,
     JwtModule,
     TokenModule,
+    SessionModule,
   ],
 })
 export class AuthModule {}
