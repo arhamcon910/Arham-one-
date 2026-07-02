@@ -13,29 +13,34 @@ export class TokenService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async generateAccessToken(payload: JwtPayload): Promise<string> {
+  async generateAccessToken(
+    payload: JwtPayload,
+  ): Promise<string> {
     return this.jwtService.signAsync(payload, {
       expiresIn: '1d',
     });
   }
 
-  async generateRefreshToken(payload: JwtPayload): Promise<string> {
+  async generateRefreshToken(
+    payload: JwtPayload,
+  ): Promise<string> {
     return this.jwtService.signAsync(payload, {
       expiresIn: '30d',
     });
   }
 
-  async generateTokenPair(payload: JwtPayload) {
-    const accessToken = await this.generateAccessToken(payload);
-    const refreshToken = await this.generateRefreshToken(payload);
-
+  async generateTokenPair(
+    payload: JwtPayload,
+  ) {
     return {
-      accessToken,
-      refreshToken,
+      accessToken: await this.generateAccessToken(payload),
+      refreshToken: await this.generateRefreshToken(payload),
     };
   }
 
-  async verifyToken(token: string): Promise<JwtPayload> {
+  async verifyToken(
+    token: string,
+  ): Promise<JwtPayload> {
     return this.jwtService.verifyAsync<JwtPayload>(token);
   }
 

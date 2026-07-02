@@ -33,7 +33,9 @@ export class SessionService {
 
   async findById(id: string) {
     return this.prisma.session.findUnique({
-      where: { id },
+      where: {
+        id,
+      },
     });
   }
 
@@ -55,6 +57,23 @@ export class SessionService {
         id: sessionId,
       },
       data: {
+        lastActivity: new Date(),
+      },
+    });
+  }
+
+  async rotateRefreshToken(
+    sessionId: string,
+    refreshToken: string,
+  ) {
+    const refreshTokenHash = await argon2.hash(refreshToken);
+
+    return this.prisma.session.update({
+      where: {
+        id: sessionId,
+      },
+      data: {
+        refreshTokenHash,
         lastActivity: new Date(),
       },
     });
@@ -98,6 +117,10 @@ export class SessionService {
     }
 
     if (session.revoked) {
+      return null;
+    }
+
+    if (session.expiresAt < new Date()) {
       return null;
     }
 
