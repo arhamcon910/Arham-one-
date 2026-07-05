@@ -51,6 +51,9 @@ model Session {
   ipAddress        String?
   userAgent        String?
   lastActivity     DateTime @default(now())
+  lastIpAddress    String?
+  lastUserAgent    String?
+  rotationCounter  Int      @default(0)
   expiresAt        DateTime
   revoked          Boolean  @default(false)
   createdAt        DateTime @default(now())

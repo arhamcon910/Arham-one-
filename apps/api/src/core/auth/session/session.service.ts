@@ -1,22 +1,41 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import * as argon2 from 'argon2';
+import type { Session } from '@prisma/client';
 
 import { PrismaService } from '../../../database/prisma/prisma.service';
 
+import { TokenService } from '../token';
+
+export interface CreateSessionParams {
+  userId: string;
+  refreshToken: string;
+  deviceName?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  expiresAt: Date;
+}
+
+export interface RotateRefreshTokenMeta {
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+export interface RotatedSessionResult {
+  session: Session;
+  accessToken: string;
+  refreshToken: string;
+}
+
 @Injectable()
 export class SessionService {
+  private readonly logger = new Logger(SessionService.name);
+
   constructor(
     private readonly prisma: PrismaService,
+    private readonly tokenService: TokenService,
   ) {}
 
-  async createSession(data: {
-    userId: string;
-    refreshToken: string;
-    deviceName?: string;
-    ipAddress?: string;
-    userAgent?: string;
-    expiresAt: Date;
-  }) {
+  async createSession(data: CreateSessionParams): Promise<Session> {
     const refreshTokenHash = await argon2.hash(data.refreshToken);
 
     return this.prisma.session.create({
@@ -31,7 +50,7 @@ export class SessionService {
     });
   }
 
-  async findById(id: string) {
+  async findById(id: string): Promise<Session | null> {
     return this.prisma.session.findUnique({
       where: {
         id,
@@ -39,7 +58,7 @@ export class SessionService {
     });
   }
 
-  async findActiveSessions(userId: string) {
+  async findActiveSessions(userId: string): Promise<Session[]> {
     return this.prisma.session.findMany({
       where: {
         userId,
@@ -51,7 +70,7 @@ export class SessionService {
     });
   }
 
-  async updateLastActivity(sessionId: string) {
+  async updateLastActivity(sessionId: string): Promise<Session> {
     return this.prisma.session.update({
       where: {
         id: sessionId,
@@ -62,50 +81,21 @@ export class SessionService {
     });
   }
 
-  async rotateRefreshToken(
-    sessionId: string,
-    refreshToken: string,
-  ) {
-    const refreshTokenHash = await argon2.hash(refreshToken);
-
-    return this.prisma.session.update({
-      where: {
-        id: sessionId,
-      },
-      data: {
-        refreshTokenHash,
-        lastActivity: new Date(),
-      },
-    });
-  }
-
-  async revokeSession(id: string) {
-    return this.prisma.session.update({
-      where: {
-        id,
-      },
-      data: {
-        revoked: true,
-      },
-    });
-  }
-
-  async revokeAllSessions(userId: string) {
-    return this.prisma.session.updateMany({
-      where: {
-        userId,
-        revoked: false,
-      },
-      data: {
-        revoked: true,
-      },
-    });
-  }
-
+  /**
+   * Validates a refresh token against a session without mutating any
+   * state. A session is only considered valid when it:
+   *   - exists
+   *   - is active (not revoked)
+   *   - has not expired
+   *   - matches the stored refresh token hash
+   *
+   * Returns the session on success, `null` otherwise. Kept side-effect
+   * free so it can be reused independently of the rotation flow.
+   */
   async verifyRefreshToken(
     sessionId: string,
     refreshToken: string,
-  ) {
+  ): Promise<Session | null> {
     const session = await this.prisma.session.findUnique({
       where: {
         id: sessionId,
@@ -134,5 +124,133 @@ export class SessionService {
     }
 
     return session;
+  }
+
+  /**
+   * Enterprise refresh token rotation (AUTH-05.2).
+   *
+   * Every time a refresh token is redeemed:
+   *   1. The session + token pair is fully re-validated (exists, active,
+   *      not expired, hash match) via `verifyRefreshToken`.
+   *   2. A brand-new refresh token is minted.
+   *   3. The new refresh token is hashed and persisted.
+   *   4. `rotationCounter` is incremented.
+   *   5. `lastActivity`, `lastIpAddress` and `lastUserAgent` are refreshed.
+   *   6. The previous refresh token is invalidated immediately: the stored
+   *      hash is swapped with an atomic compare-and-swap, so a second,
+   *      concurrent, or replayed attempt to redeem the same (now stale)
+   *      token can never match and is treated as a reuse attempt.
+   *
+   * Throws `UnauthorizedException` for any validation failure. The
+   * message is intentionally generic so callers cannot enumerate why a
+   * refresh attempt failed.
+   */
+  async rotateRefreshToken(
+    sessionId: string,
+    refreshToken: string,
+    meta: RotateRefreshTokenMeta = {},
+  ): Promise<RotatedSessionResult> {
+    const session = await this.verifyRefreshToken(sessionId, refreshToken);
+
+    if (!session) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    let payload: {
+      sub: string;
+      email: string;
+      organizationId: string;
+    };
+
+    try {
+      payload = await this.tokenService.verifyToken(refreshToken);
+    } catch {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    if (payload.sub !== session.userId) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    const tokenPayload = {
+      sub: payload.sub,
+      email: payload.email,
+      organizationId: payload.organizationId,
+    };
+
+    const [accessToken, newRefreshToken] = await Promise.all([
+      this.tokenService.generateAccessToken(tokenPayload),
+      this.tokenService.generateRefreshToken(tokenPayload),
+    ]);
+
+    const newRefreshTokenHash = await argon2.hash(newRefreshToken);
+
+    // Atomic compare-and-swap on the previously-verified hash. This is the
+    // mechanism that makes the old refresh token invalid immediately and
+    // guards against two requests racing to rotate the same session.
+    const { count } = await this.prisma.session.updateMany({
+      where: {
+        id: sessionId,
+        refreshTokenHash: session.refreshTokenHash,
+        revoked: false,
+      },
+      data: {
+        refreshTokenHash: newRefreshTokenHash,
+        rotationCounter: {
+          increment: 1,
+        },
+        lastActivity: new Date(),
+        lastIpAddress: meta.ipAddress,
+        lastUserAgent: meta.userAgent,
+      },
+    });
+
+    if (count === 0) {
+      // Someone else rotated this session between our read and our write,
+      // or this token has already been rotated and is being replayed.
+      // Lock the session down rather than silently failing.
+      this.logger.warn(
+        `Refresh token reuse detected for session ${sessionId}`,
+      );
+
+      await this.revokeSession(sessionId);
+
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    const updatedSession = await this.prisma.session.findUniqueOrThrow({
+      where: {
+        id: sessionId,
+      },
+    });
+
+    return {
+      session: updatedSession,
+      accessToken,
+      refreshToken: newRefreshToken,
+    };
+  }
+
+  async revokeSession(id: string): Promise<Session> {
+    return this.prisma.session.update({
+      where: {
+        id,
+      },
+      data: {
+        revoked: true,
+      },
+    });
+  }
+
+  async revokeAllSessions(userId: string) {
+    return this.prisma.session.updateMany({
+      where: {
+        userId,
+        revoked: false,
+      },
+      data: {
+        revoked: true,
+      },
+    });
   }
 }
