@@ -94,4 +94,31 @@ export class SessionController {
       },
     };
   }
+
+  @Post('logout-all')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Logout every active session belonging to the current user',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Logged out from all sessions successfully',
+  })
+  async logoutAll(
+    @CurrentUser() user: any,
+  ) {
+    const revokedSessions = await this.sessionService.logoutAllSessions(
+      user.id,
+    );
+
+    return {
+      success: true,
+      message: 'Logged out from all sessions successfully.',
+      data: {
+        revokedSessions,
+      },
+    };
+  }
 }

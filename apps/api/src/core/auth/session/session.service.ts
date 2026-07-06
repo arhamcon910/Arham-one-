@@ -38,6 +38,7 @@ export interface RotatedSessionResult {
  */
 export const SessionRevokedReason = {
   USER_LOGOUT: 'USER_LOGOUT',
+  USER_LOGOUT_ALL: 'USER_LOGOUT_ALL',
   REFRESH_TOKEN_REUSE_DETECTED: 'REFRESH_TOKEN_REUSE_DETECTED',
 } as const;
 
@@ -303,7 +304,27 @@ export class SessionService {
     });
   }
 
-  async revokeAllSessions(userId: string) {
+  /**
+   * Logs out every active session belonging to a user (AUTH-06.2).
+   *
+   * Thin, semantically-named wrapper around `revokeAllSessions` so the
+   * "logout everywhere" intent (and its dedicated revocation reason) is
+   * explicit at the call site, mirroring `logoutSession` above.
+   *
+   * Returns the number of sessions that were actually revoked. Sessions
+   * that were already revoked are left untouched (and not counted) -
+   * `revokeAllSessions` only ever matches `revoked: false` rows.
+   */
+  async logoutAllSessions(userId: string): Promise<number> {
+    const { count } = await this.revokeAllSessions(
+      userId,
+      SessionRevokedReason.USER_LOGOUT_ALL,
+    );
+
+    return count;
+  }
+
+  async revokeAllSessions(userId: string, reason?: string) {
     return this.prisma.session.updateMany({
       where: {
         userId,
@@ -311,6 +332,8 @@ export class SessionService {
       },
       data: {
         revoked: true,
+        revokedReason: reason,
+        revokedAt: new Date(),
       },
     });
   }
