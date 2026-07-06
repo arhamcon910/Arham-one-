@@ -56,6 +56,8 @@ model Session {
   rotationCounter  Int      @default(0)
   expiresAt        DateTime
   revoked          Boolean  @default(false)
+  revokedReason    String?
+  revokedAt        DateTime?
   createdAt        DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

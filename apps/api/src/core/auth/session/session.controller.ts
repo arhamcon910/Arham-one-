@@ -1,9 +1,21 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 
 import { SessionService } from './session.service';
 import { RefreshTokenDto } from '../dto/refresh-token.dto';
+import { LogoutDto } from '../dto/logout.dto';
+
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { CurrentUser } from '../decorators/current-user.decorator';
 
 @ApiTags('Authentication')
 @Controller('auth/session')
@@ -46,6 +58,39 @@ export class SessionController {
         sessionId: result.session.id,
         accessToken: result.accessToken,
         refreshToken: result.refreshToken,
+      },
+    };
+  }
+
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Logout the current authenticated session',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Logged out successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Session not found for the current user',
+  })
+  async logout(
+    @CurrentUser() user: any,
+    @Body() dto: LogoutDto,
+  ) {
+    const session = await this.sessionService.logoutSession(
+      dto.sessionId,
+      user.id,
+    );
+
+    return {
+      success: true,
+      message: 'Logged out successfully',
+      data: {
+        sessionId: session.id,
       },
     };
   }

@@ -1,4 +1,9 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import * as argon2 from 'argon2';
 import type { Session } from '@prisma/client';
 
@@ -25,6 +30,16 @@ export interface RotatedSessionResult {
   accessToken: string;
   refreshToken: string;
 }
+
+/**
+ * Machine-readable reasons stored on `Session.revokedReason` whenever a
+ * session is revoked. Kept as a plain string union (rather than a Prisma
+ * enum) so new reasons can be introduced without a schema migration.
+ */
+export const SessionRevokedReason = {
+  USER_LOGOUT: 'USER_LOGOUT',
+  REFRESH_TOKEN_REUSE_DETECTED: 'REFRESH_TOKEN_REUSE_DETECTED',
+} as const;
 
 @Injectable()
 export class SessionService {
@@ -213,7 +228,10 @@ export class SessionService {
         `Refresh token reuse detected for session ${sessionId}`,
       );
 
-      await this.revokeSession(sessionId);
+      await this.revokeSession(
+        sessionId,
+        SessionRevokedReason.REFRESH_TOKEN_REUSE_DETECTED,
+      );
 
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
@@ -231,13 +249,56 @@ export class SessionService {
     };
   }
 
-  async revokeSession(id: string): Promise<Session> {
+  /**
+   * Logs out a single session belonging to the currently authenticated
+   * user (AUTH-06.1).
+   *
+   *   1. Only the session identified by `sessionId` is touched - every
+   *      other session for the user (or anyone else) is left untouched.
+   *   2. `revoked` is set to `true` and `revokedReason` is stamped with
+   *      `USER_LOGOUT`.
+   *   3. Because `revoked` gates both `verifyRefreshToken` and
+   *      `rotateRefreshToken`, the session's refresh token is rejected on
+   *      its very next use - it is invalidated immediately.
+   *   4. `revokedAt` records the logout timestamp.
+   *
+   * Ownership is enforced here: a session that does not exist, or that
+   * belongs to a different user, is reported as "not found" rather than
+   * "forbidden" so callers cannot use this endpoint to enumerate other
+   * users' session ids.
+   */
+  async logoutSession(
+    sessionId: string,
+    userId: string,
+  ): Promise<Session> {
+    const session = await this.prisma.session.findUnique({
+      where: {
+        id: sessionId,
+      },
+    });
+
+    if (!session || session.userId !== userId) {
+      throw new NotFoundException('Session not found');
+    }
+
+    if (session.revoked) {
+      // Already logged out elsewhere - idempotent no-op that preserves
+      // whatever revocation details were already recorded.
+      return session;
+    }
+
+    return this.revokeSession(sessionId, SessionRevokedReason.USER_LOGOUT);
+  }
+
+  async revokeSession(id: string, reason?: string): Promise<Session> {
     return this.prisma.session.update({
       where: {
         id,
       },
       data: {
         revoked: true,
+        revokedReason: reason,
+        revokedAt: new Date(),
       },
     });
   }
