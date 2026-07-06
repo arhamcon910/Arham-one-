@@ -32,6 +32,14 @@ export interface RotatedSessionResult {
   refreshToken: string;
 }
 
+export interface SessionCleanupResult {
+  expiredSessionsRemoved: number;
+  revokedSessionsRemoved: number;
+}
+
+/** Fallback used when no retention period is configured (AUTH-09). */
+export const DEFAULT_REVOKED_SESSION_RETENTION_DAYS = 30;
+
 /**
  * Machine-readable reasons stored on `Session.revokedReason` whenever a
  * session is revoked. Kept as a plain string union (rather than a Prisma
@@ -409,5 +417,53 @@ export class SessionService {
         revokedAt: new Date(),
       },
     });
+  }
+
+  /**
+   * Deletes rows that no longer need to be kept around (AUTH-09), run by
+   * the daily `SessionCleanupService` cron job:
+   *   - Any session whose `expiresAt` has passed, regardless of `revoked`.
+   *   - Any revoked session whose `revokedAt` is older than
+   *     `revokedRetentionDays`, even if it hasn't reached its natural
+   *     `expiresAt` yet.
+   *
+   * Active sessions (not expired and not revoked) never match either
+   * `where` clause, so they are never touched. The two deletes run
+   * sequentially rather than as a single query so the two counts required
+   * for the cleanup log can be reported separately; a session that is
+   * both expired and long-revoked is only ever removed (and counted)
+   * once, by the first query.
+   */
+  async cleanupSessions(
+    revokedRetentionDays: number = DEFAULT_REVOKED_SESSION_RETENTION_DAYS,
+  ): Promise<SessionCleanupResult> {
+    const now = new Date();
+
+    const { count: expiredSessionsRemoved } =
+      await this.prisma.session.deleteMany({
+        where: {
+          expiresAt: {
+            lt: now,
+          },
+        },
+      });
+
+    const revokedCutoff = new Date(now);
+    revokedCutoff.setDate(revokedCutoff.getDate() - revokedRetentionDays);
+
+    const { count: revokedSessionsRemoved } =
+      await this.prisma.session.deleteMany({
+        where: {
+          revoked: true,
+          revokedAt: {
+            lt: revokedCutoff,
+          },
+        },
+      });
+
+    return {
+      expiredSessionsRemoved,
+      revokedSessionsRemoved,
+    };
   }
 }

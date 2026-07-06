@@ -6,11 +6,12 @@ import { TokenModule } from '../token';
 
 import { SessionController } from './session.controller';
 import { SessionService } from './session.service';
+import { SessionCleanupService } from './session-cleanup.service';
 
 @Module({
   imports: [PrismaModule, TokenModule],
   controllers: [SessionController],
-  providers: [SessionService],
+  providers: [SessionService, SessionCleanupService],
   exports: [SessionService],
 })
 export class SessionModule {}
