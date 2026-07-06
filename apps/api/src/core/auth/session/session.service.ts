@@ -86,6 +86,31 @@ export class SessionService {
     });
   }
 
+  /**
+   * Lists every non-expired session belonging to a user, active or
+   * revoked, for the session management UI (AUTH-07).
+   *
+   * Unlike `findActiveSessions`, revoked sessions are intentionally kept
+   * in the result set so a user can see that a device was logged out -
+   * only sessions whose `expiresAt` has passed are dropped. Callers are
+   * responsible for shaping the response (e.g. omitting
+   * `refreshTokenHash` and flagging the caller's own session as
+   * `current`) since that is presentation, not data-access, concern.
+   */
+  async listSessions(userId: string): Promise<Session[]> {
+    return this.prisma.session.findMany({
+      where: {
+        userId,
+        expiresAt: {
+          gt: new Date(),
+        },
+      },
+      orderBy: {
+        lastActivity: 'desc',
+      },
+    });
+  }
+
   async updateLastActivity(sessionId: string): Promise<Session> {
     return this.prisma.session.update({
       where: {

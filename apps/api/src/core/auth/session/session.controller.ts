@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -23,6 +25,42 @@ export class SessionController {
   constructor(
     private readonly sessionService: SessionService,
   ) {}
+
+  @Get()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'List every non-expired session belonging to the current user',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Sessions fetched successfully',
+  })
+  async list(
+    @CurrentUser() user: any,
+    @Query('sessionId') currentSessionId?: string,
+  ) {
+    const sessions = await this.sessionService.listSessions(user.id);
+
+    return {
+      success: true,
+      message: 'Sessions fetched successfully',
+      data: {
+        sessions: sessions.map((session) => ({
+          sessionId: session.id,
+          createdAt: session.createdAt,
+          expiresAt: session.expiresAt,
+          lastActivity: session.lastActivity,
+          lastIpAddress: session.lastIpAddress,
+          lastUserAgent: session.lastUserAgent,
+          revoked: session.revoked,
+          revokedAt: session.revokedAt,
+          revokedReason: session.revokedReason,
+          current: session.id === currentSessionId,
+        })),
+      },
+    };
+  }
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
