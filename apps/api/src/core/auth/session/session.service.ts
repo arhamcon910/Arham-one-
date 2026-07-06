@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   Logger,
   NotFoundException,
@@ -39,6 +40,7 @@ export interface RotatedSessionResult {
 export const SessionRevokedReason = {
   USER_LOGOUT: 'USER_LOGOUT',
   USER_LOGOUT_ALL: 'USER_LOGOUT_ALL',
+  USER_REVOKED_SESSION: 'USER_REVOKED_SESSION',
   REFRESH_TOKEN_REUSE_DETECTED: 'REFRESH_TOKEN_REUSE_DETECTED',
 } as const;
 
@@ -327,6 +329,52 @@ export class SessionService {
         revokedAt: new Date(),
       },
     });
+  }
+
+  /**
+   * Revokes a single, specific session belonging to the current user
+   * without touching any other session (AUTH-08).
+   *
+   * Ownership is enforced exactly like `logoutSession`: a session that
+   * doesn't exist or belongs to someone else is reported as "not found"
+   * rather than "forbidden", so this endpoint cannot be used to probe
+   * other users' session ids.
+   *
+   * The caller's own current session is explicitly out of scope for this
+   * endpoint - revoking it here is rejected with a `BadRequestException`
+   * pointing callers at the dedicated logout endpoint instead.
+   */
+  async revokeUserSession(
+    sessionId: string,
+    userId: string,
+    currentSessionId?: string,
+  ): Promise<Session> {
+    const session = await this.prisma.session.findUnique({
+      where: {
+        id: sessionId,
+      },
+    });
+
+    if (!session || session.userId !== userId) {
+      throw new NotFoundException('Session not found');
+    }
+
+    if (currentSessionId && session.id === currentSessionId) {
+      throw new BadRequestException(
+        'Use logout endpoint for the current session.',
+      );
+    }
+
+    if (session.revoked) {
+      // Already revoked - idempotent no-op that preserves whatever
+      // revocation details were already recorded.
+      return session;
+    }
+
+    return this.revokeSession(
+      sessionId,
+      SessionRevokedReason.USER_REVOKED_SESSION,
+    );
   }
 
   /**

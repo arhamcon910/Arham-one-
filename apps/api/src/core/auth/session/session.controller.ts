@@ -15,6 +15,7 @@ import type { Request } from 'express';
 import { SessionService } from './session.service';
 import { RefreshTokenDto } from '../dto/refresh-token.dto';
 import { LogoutDto } from '../dto/logout.dto';
+import { RevokeSessionDto } from '../dto/revoke-session.dto';
 
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { CurrentUser } from '../decorators/current-user.decorator';
@@ -156,6 +157,45 @@ export class SessionController {
       message: 'Logged out from all sessions successfully.',
       data: {
         revokedSessions,
+      },
+    };
+  }
+
+  @Post('revoke')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: "Revoke one of the current user's other sessions",
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Session revoked successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Cannot revoke the current session via this endpoint',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Session not found for the current user',
+  })
+  async revoke(
+    @CurrentUser() user: any,
+    @Body() dto: RevokeSessionDto,
+    @Query('currentSessionId') currentSessionId?: string,
+  ) {
+    const session = await this.sessionService.revokeUserSession(
+      dto.sessionId,
+      user.id,
+      currentSessionId,
+    );
+
+    return {
+      success: true,
+      message: 'Session revoked successfully.',
+      data: {
+        sessionId: session.id,
       },
     };
   }
