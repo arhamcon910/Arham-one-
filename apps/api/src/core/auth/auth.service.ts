@@ -69,12 +69,16 @@ export class AuthService {
       expiresAt,
     });
 
+    // Never return the password hash to the client - `usersService.create`
+    // returns the raw Prisma row, so it has to be stripped here.
+    const { passwordHash: _passwordHash, ...safeUser } = user;
+
     return {
       success: true,
       message: 'Organization registered successfully',
       data: {
         organization,
-        user,
+        user: safeUser,
         sessionId: session.id,
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
@@ -117,12 +121,17 @@ export class AuthService {
       expiresAt,
     });
 
+    // Never return the password hash to the client - `findByEmailWithPassword`
+    // returns the raw Prisma row (it needs the hash to verify the password
+    // above), so it has to be stripped before the response is built.
+    const { passwordHash, ...safeUser } = user;
+
     return {
       success: true,
       message: 'Login successful',
       data: {
         organization,
-        user,
+        user: safeUser,
         sessionId: session.id,
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,

@@ -19,6 +19,7 @@ export class RegisterDto {
     example: 'ARHAM',
   })
   @IsString()
+  @IsNotEmpty()
   @Matches(/^[A-Z0-9_-]+$/)
   organizationCode: string;
 
@@ -43,10 +44,10 @@ export class RegisterDto {
   email: string;
 
   @ApiProperty({
-  example: 'StrongPassword123!',
-  minLength: 8,
-})
-@IsString()
-@MinLength(8)
-password: string;
+    example: 'StrongPassword123!',
+    minLength: 8,
+  })
+  @IsString()
+  @MinLength(8)
+  password: string;
 }

@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 
-export interface JwtPayload {
-  sub: string;
-  email: string;
-  organizationId: string;
-}
+import type { JwtPayload } from '../interfaces/jwt-payload.interface';
+
+// Re-exported so existing consumers that import `JwtPayload` from this
+// module (or from the `token` barrel) keep working - `../interfaces` is
+// the canonical definition, this file no longer declares its own copy.
+export type { JwtPayload };
 
 @Injectable()
 export class TokenService {

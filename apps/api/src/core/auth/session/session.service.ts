@@ -11,6 +11,7 @@ import type { Session } from '@prisma/client';
 import { PrismaService } from '../../../database/prisma/prisma.service';
 
 import { TokenService } from '../token';
+import type { JwtPayload } from '../interfaces/jwt-payload.interface';
 
 export interface CreateSessionParams {
   userId: string;
@@ -207,11 +208,7 @@ export class SessionService {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
-    let payload: {
-      sub: string;
-      email: string;
-      organizationId: string;
-    };
+    let payload: JwtPayload;
 
     try {
       payload = await this.tokenService.verifyToken(refreshToken);

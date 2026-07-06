@@ -34,6 +34,10 @@ export class AuthController {
     status: 201,
     description: 'Organization registered successfully',
   })
+  @ApiResponse({
+    status: 409,
+    description: 'Organization code or email is already registered',
+  })
   async register(
     @Body() dto: RegisterDto,
   ) {
@@ -48,6 +52,10 @@ export class AuthController {
     status: 200,
     description: 'Login successful',
   })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid email or password',
+  })
   async login(
     @Body() dto: LoginDto,
   ) {
@@ -59,6 +67,10 @@ export class AuthController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get current logged in user',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Current user fetched successfully',
   })
   async me(
     @CurrentUser() user: any,

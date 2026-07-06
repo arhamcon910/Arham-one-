@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 
 import { AuthController } from './auth.controller';
@@ -19,15 +18,15 @@ import { SessionModule } from './session';
     TokenModule,
     SessionModule,
 
+    // Only PassportModule is needed here: JwtStrategy configures its own
+    // secret directly via passport-jwt and never injects `JwtService`.
+    // Signing tokens is TokenModule's responsibility - it registers its
+    // own JwtModule for that. A second, unused JwtModule registration
+    // used to live here; it was dead weight (nothing in AuthModule
+    // injected JwtService) and its independently-hardcoded secret had
+    // drifted out of sync with JwtStrategy's, which was a latent bug.
     PassportModule.register({
       defaultStrategy: 'jwt',
-    }),
-
-    JwtModule.register({
-      secret: process.env.JWT_SECRET || 'arham-secret-key',
-      signOptions: {
-        expiresIn: '1d',
-      },
     }),
   ],
 
@@ -41,7 +40,6 @@ import { SessionModule } from './session';
   exports: [
     AuthService,
     PassportModule,
-    JwtModule,
     TokenModule,
     SessionModule,
   ],

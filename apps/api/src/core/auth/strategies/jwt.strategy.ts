@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
 import { PrismaService } from '../../../database/prisma/prisma.service';
+import type { JwtPayload } from '../interfaces/jwt-payload.interface';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -12,16 +13,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey:
-        process.env.JWT_SECRET || 'defaultSecretChangeMe',
+      // Must match the secret TokenModule configures for @nestjs/jwt -
+      // otherwise every access token issued by TokenService would fail
+      // verification here whenever JWT_SECRET is unset.
+      secretOrKey: process.env.JWT_SECRET || 'arham-secret-key',
     });
   }
 
-  async validate(payload: {
-    sub: string;
-    email: string;
-    organizationId: string;
-  }) {
+  async validate(payload: JwtPayload) {
     const user = await this.prisma.user.findUnique({
       where: {
         id: payload.sub,
